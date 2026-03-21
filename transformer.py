@@ -24,9 +24,12 @@ class SimpleAttention(torch.nn.Module):
 
         kt = k.transpose(-2, -1)
         
-        attn = (q@kt)/dk # now we have (batch, heads, qseq, kseq)
-        attn = torch.softmax(attn, dim = -1)
-        attn = attn@v #(qseq, kseq)x(vseq, head_dim)
+        scores = (q@kt)/dk # now we have (batch, heads, qseq, kseq)
+
+        #to do - masking
+
+        scores = torch.softmax(scores, dim = -1)
+        attn = scores@v #(qseq, kseq)x(vseq, head_dim)
 
         return attn
 
@@ -85,14 +88,13 @@ class SimpleAttention(torch.nn.Module):
         out = self.output(attn)
 
         return out
-
-    def decoder():
-        pass
+        
+  
+class FFLayer():
+    pass        
+class Decoder():
+    pass
 
 
 if __name__ == "__main__":
-
-    
-    
-
     pass
