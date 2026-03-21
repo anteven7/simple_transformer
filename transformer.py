@@ -46,10 +46,6 @@ class SimpleAttention(torch.nn.Module):
         q = self.q(x)
         k = self.k(x)
         v = self.v(x)
-        print(f"q.size(): {q.size()}")
-        print(f"k.size(): {k.size()}")
-        print(f"v.size(): {v.size()}")
-
 
         #lets reshape them into (batch_size, sequence_length, heads, head_dim) (d_model =  n_heads x head_dim )
 
@@ -85,7 +81,6 @@ class SimpleAttention(torch.nn.Module):
         attn = attn.permute(0, 2, 1, 3).contiguous()
 
         attn = attn.reshape(batch_size, seq_len, self.d_model)
-        print(f"attn.size(): {attn.size()}")
 
         out = self.output(attn)
 
