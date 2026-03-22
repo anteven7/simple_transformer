@@ -1,15 +1,15 @@
 import torch
 import math
+
 class SimpleAttention(torch.nn.Module):
-    def __init__(self, input_dim: int = 512, d_model: int = 128, heads: int = 4):
+    def __init__(self, d_model: int = 128, heads: int = 4):
 
         super().__init__() 
-        self.input_dim = input_dim
         self.d_model = d_model
         self.heads = heads
-        self.q = torch.nn.Linear(input_dim, d_model)
-        self.k = torch.nn.Linear(input_dim, d_model)
-        self.v = torch.nn.Linear(input_dim, d_model)
+        self.q = torch.nn.Linear(d_model, d_model)
+        self.k = torch.nn.Linear(d_model, d_model)
+        self.v = torch.nn.Linear(d_model, d_model)
         self.output = torch.nn.Linear(d_model, d_model)
         self.head_dim = d_model // heads
 
@@ -26,17 +26,26 @@ class SimpleAttention(torch.nn.Module):
         
         scores = (q@kt)/dk # now we have (batch, heads, qseq, kseq)
 
-        #to do - masking
+        #ahora el masking es vital para decoder-only ya que evitamos que la atención tenga información sobre futuros
+        #tokens y atienda solamente a tokens previos (se ponen a -inf el triangulo superior de la matriz)
+        mask = torch.tril(torch.ones(scores.size(-2), scores.size(-1), device=scores.device))
+        #tril genera matriz triangular inferior de dimenisones (qseq y kseq)
+
+        scores = scores.masked_fill(mask == 0, float('-inf'))
+        #masked_fill aplica la máscara (cuando mask == 0 lo pone como -inf)
+        #el vector scores es 4D mientras q mask es 2D. Esto lo soluciona masked_fill automaticamente con el broadcasting
+        #de pytorch (rellena con 1s quedando (1, 1, seq_len, seq_len))
+
 
         scores = torch.softmax(scores, dim = -1)
         attn = scores@v #(qseq, kseq)x(vseq, head_dim)
 
         return attn
 
-    def attn(self, x):
-        # x is ((batch_size, sequence_length, input_dim)): 
+    def forward(self, x):
+        # x is ((batch_size, sequence_length, d_model)): 
         print(f"x.size(): {x.size()}")
-        batch_size, seq_len , input_dim = x.size()
+        batch_size, seq_len , d_model = x.size()
 
         # batch_size : number of sequences processed concurrently in a single forward or backward pass.
         # sequence_length : total number of discrete elements, tokens, or time steps contained within a single  sequence.
@@ -86,14 +95,63 @@ class SimpleAttention(torch.nn.Module):
         attn = attn.reshape(batch_size, seq_len, self.d_model)
 
         out = self.output(attn)
-
+        # out is a tensor (batch size, seq_len, d_model)
         return out
+
         
-  
-class FFLayer():
-    pass        
-class Decoder():
-    pass
+class FFLayer(torch.nn.Module):
+
+    def __init__(self, d_model, dropout=0.1):
+
+        super().__init__()
+
+        self.ff = nn.Sequential(
+            torch.nn.Linear(d_model, d_model * 4), #usually in transformers you expand d_model x 4 before turning it into d_model again 
+            torch.nn.GELU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(d_model * 4, d_model)
+        )
+        
+    def forward(self, x):
+
+        return self.ff(x)
+
+class Decoder(torch.nn.Module):
+    
+    def __init__(self, d_model, n_heads, dropout):
+
+        """
+        we follow the traditional implementation of the decoder
+        here is super important to understand LayerNorm and residual connections between the modules
+        the basic decoder module is attn + ffw blocks
+        
+        las capas residuales (add) aseguran que no vamos a tener problemas de vanishing gradients al
+        aplicar backpropagation. si el gradiente se va a 0 seguiremos sumando la identidad permitiendo al gradiente
+        continuar (teoría de las conexiones residuales)
+        
+        se normaliza para mantener estos valores entre -1 y 1 con media en 0 y así solventar
+        el problema causado por sumar en las conexiones residuales
+    
+        """
+        super().__init__()
+        self.attn = SimpleAttention(d_model, n_heads)
+        self.ffw = FFLayer(d_model, dropout)
+        self.norm1 = torch.nn.LayerNorm(d_model)
+        self.norm2 = torch.nn.LayerNorm(d_model)
+
+    def forward(self, x):
+
+        norm = self.norm1(x)
+        attn = self.attn(norm)
+        add = attn + x 
+        
+        
+        norm = self.norm2(add)
+        ffw = self.ffw(norm)
+        add = add + ffw
+        
+
+        return add
 
 
 if __name__ == "__main__":
