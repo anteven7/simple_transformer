@@ -44,7 +44,6 @@ class SimpleAttention(torch.nn.Module):
 
     def forward(self, x):
         # x is ((batch_size, sequence_length, d_model)): 
-        print(f"x.size(): {x.size()}")
         batch_size, seq_len , d_model = x.size()
 
         # batch_size : number of sequences processed concurrently in a single forward or backward pass.
